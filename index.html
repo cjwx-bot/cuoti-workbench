@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#2b5aed">
+<title>错题本 · 初中生学习工作台</title>
+<style>
+:root{
+  --blue:#2b5aed; --blue-d:#1e42b8; --blue-l:#eaf0ff;
+  --red:#d4380d; --orange:#d46b08; --green:#237804;
+  --ink:#1f2329; --muted:#646a73; --hint:#8f959e;
+  --line:#e5e8eb; --bg:#f5f7fa; --card:#fff;
+  --radius:16px; --shadow:0 2px 12px rgba(31,35,41,.06);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  background:var(--bg); color:var(--ink); font-size:15px; line-height:1.6;
+  padding-bottom:calc(84px + env(safe-area-inset-bottom));
+}
+.wrap{max-width:760px;margin:0 auto;padding:16px 16px 0}
+.hidden{display:none !important}
+
+/* 顶部 */
+.hero{background:linear-gradient(135deg,#2b5aed,#4b78f5);color:#fff;border-radius:20px;padding:22px 20px;margin-bottom:16px}
+.hero .eyebrow{font-size:11px;letter-spacing:2px;opacity:.8;font-weight:600}
+.hero h1{margin:6px 0 2px;font-size:26px;font-weight:700}
+.hero p{margin:0;opacity:.9;font-size:13px}
+.hero .privacy{margin-top:12px;font-size:11px;opacity:.75;border-top:1px solid rgba(255,255,255,.25);padding-top:10px}
+
+/* 快捷入口 */
+.quick{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px}
+.quick button{
+  border:0;border-radius:16px;padding:16px 6px;background:var(--card);box-shadow:var(--shadow);
+  display:flex;flex-direction:column;align-items:center;gap:8px;cursor:pointer;color:var(--ink);
+  font-size:13px;transition:transform .12s,box-shadow .12s;
+}
+.quick button:active{transform:scale(.96)}
+.quick .ic{width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:19px;font-weight:700;color:#fff}
+.ic-add{background:var(--blue)} .ic-practice{background:#7c5cd6} .ic-stats{background:#0f9d75}
+
+/* 搜索筛选 */
+.filters{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+.filters input,.filters select{
+  border:1px solid var(--line);border-radius:12px;padding:11px 12px;background:var(--card);
+  font-size:14px;color:var(--ink);outline:none;min-width:0;
+}
+.filters input{flex:1 1 180px}
+.filters select{flex:0 1 auto}
+.filters input:focus,.filters select:focus{border-color:var(--blue)}
+
+/* 列表卡片 */
+.card{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px;margin-bottom:12px}
+.card-head{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.badge{font-size:11px;padding:3px 9px;border-radius:8px;font-weight:600}
+.b-subject{background:var(--blue-l);color:var(--blue)}
+.b-error{background:#f2f3f5;color:var(--muted)}
+.b-unmastered{background:#fff0ef;color:var(--red)}
+.b-reviewing{background:#fff7e6;color:var(--orange)}
+.b-mastered{background:#eaf7ef;color:var(--green)}
+.card-time{margin-left:auto;font-size:11px;color:var(--hint)}
+.card-body{display:flex;gap:12px;margin-top:12px;align-items:flex-start}
+.thumb{width:76px;height:76px;object-fit:cover;border-radius:10px;background:#f2f3f5;flex-shrink:0;cursor:zoom-in}
+.card-text{flex:1;min-width:0}
+.qtext{font-size:14px;line-height:1.5;color:var(--ink);word-break:break-word;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.tags{font-size:11px;color:var(--hint);margin-top:6px}
+.card-foot{display:flex;justify-content:space-between;align-items:center;margin-top:12px;padding-top:10px;border-top:1px solid var(--line);font-size:11px;color:var(--hint)}
+.card-foot .edit{color:var(--blue);font-weight:600}
+
+/* 空态/加载 */
+.state{text-align:center;padding:60px 20px;color:var(--hint)}
+.state .big{font-size:44px;color:var(--blue);opacity:.5}
+.state h3{color:var(--ink);margin:12px 0 4px;font-size:17px}
+
+/* 底部导航 */
+.tabbar{
+  position:fixed;left:0;right:0;bottom:0;z-index:20;background:rgba(255,255,255,.96);
+  backdrop-filter:blur(8px);border-top:1px solid var(--line);
+  display:flex;justify-content:space-around;padding:8px 0 calc(8px + env(safe-area-inset-bottom));
+}
+.tabbar button{border:0;background:none;display:flex;flex-direction:column;align-items:center;gap:2px;color:var(--hint);font-size:11px;cursor:pointer;padding:4px 12px}
+.tabbar button.on{color:var(--blue);font-weight:600}
+.tabbar .ti{font-size:20px;line-height:1}
+
+/* 页面区块 */
+.section{display:none}
+.section.on{display:block}
+.sec-title{font-size:20px;font-weight:700;margin:4px 0 14px}
+
+/* 表单 */
+.field{margin-bottom:16px}
+.field label{display:block;font-size:13px;font-weight:600;margin-bottom:7px;color:var(--ink)}
+.field label .req{color:var(--red)}
+.field input,.field select,.field textarea{
+  width:100%;border:1px solid var(--line);border-radius:12px;padding:12px;font-size:14px;
+  color:var(--ink);background:var(--card);outline:none;font-family:inherit;
+}
+.field textarea{min-height:90px;resize:vertical}
+.field input:focus,.field select:focus,.field textarea:focus{border-color:var(--blue)}
+.field-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:420px){.field-row{grid-template-columns:1fr}}
+
+/* 图片上传 + OCR */
+.imgbox{border:2px dashed #c9d2e3;border-radius:14px;background:#f8faff;padding:18px;text-align:center;cursor:pointer}
+.imgbox .plus{font-size:34px;color:var(--blue);font-weight:300;line-height:1}
+.imgbox .hint{font-size:12px;color:var(--hint);margin-top:6px}
+.preview-img{width:100%;border-radius:12px;margin-top:10px;display:block}
+.ocr-bar{display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap}
+.btn{border:0;border-radius:11px;padding:11px 18px;font-size:14px;font-weight:600;cursor:pointer;transition:opacity .12s}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn-primary{background:var(--blue);color:#fff}
+.btn-ghost{background:var(--blue-l);color:var(--blue)}
+.btn-danger{background:#fff0ef;color:var(--red)}
+.btn-block{width:100%;padding:14px;font-size:15px}
+.ocr-status{font-size:12px;color:var(--hint);margin-top:8px}
+.ocr-pre{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);margin-top:10px;cursor:pointer}
+.ocr-pre input{width:15px;height:15px;accent-color:var(--blue)}
+.ocr-review{margin-top:12px;background:var(--blue-l);border-radius:12px;padding:12px}
+.ocr-review-head{display:flex;justify-content:space-between;align-items:center;font-size:12px;font-weight:600;color:var(--blue-d);margin-bottom:8px}
+.ocr-conf{font-weight:500;color:var(--muted)}
+.ocr-review textarea{width:100%;min-height:110px;border:1px solid #c9d6f5;border-radius:10px;padding:10px;font-size:14px;font-family:inherit;color:var(--ink);background:#fff;outline:none;resize:vertical}
+.ocr-review textarea:focus{border-color:var(--blue)}
+.sym-title{font-size:11px;color:var(--muted);margin:10px 0 6px}
+.sym-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:5px}
+@media(min-width:560px){.sym-grid{grid-template-columns:repeat(9,1fr)}}
+.sym-grid button{border:1px solid #c9d6f5;background:#fff;color:var(--blue-d);border-radius:8px;height:34px;font-size:17px;cursor:pointer;transition:transform .1s}
+.sym-grid button:active{transform:scale(.9);background:var(--blue);color:#fff}
+.ocr-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.ocr-tip{font-size:11px;color:var(--muted);margin-top:8px;line-height:1.5}
+
+/* 统计 */
+.stat-card{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px;margin-bottom:12px}
+.stat-card h4{margin:0 0 14px;font-size:15px}
+.bar-row{display:flex;align-items:center;gap:10px;margin-bottom:11px;font-size:12px}
+.bar-label{width:72px;flex-shrink:0;color:var(--muted)}
+.bar-track{flex:1;height:9px;background:#f0f1f2;border-radius:6px;overflow:hidden}
+.bar-fill{height:100%;border-radius:6px}
+.bar-val{width:56px;text-align:right;color:var(--hint);flex-shrink:0}
+.tag{display:inline-block;background:var(--blue-l);color:var(--blue);font-size:12px;padding:6px 12px;border-radius:9px;margin:0 8px 8px 0}
+.insight{background:linear-gradient(135deg,#2b5aed,#4b78f5);color:#fff;border-radius:var(--radius);padding:18px;margin-bottom:12px}
+.insight .lb{font-size:11px;opacity:.8}
+.insight .tx{font-size:15px;font-weight:600;margin-top:6px;line-height:1.5}
+
+/* 练习 */
+.practice-q{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:18px;margin-bottom:12px}
+.practice-q img{width:100%;border-radius:12px;margin:12px 0}
+.q-label{font-size:11px;color:var(--hint);margin-top:14px}
+.q-value{font-size:15px;line-height:1.6;margin-top:3px;word-break:break-word}
+.q-wrong{color:var(--red)}
+.answer{background:#eaf7ef;border-left:4px solid #52c41a;border-radius:10px;padding:14px;margin-top:12px}
+.judge{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+.progress{display:flex;justify-content:space-between;font-size:13px;color:var(--muted);margin-bottom:10px}
+
+/* 弹窗 */
+.modal-mask{position:fixed;inset:0;background:rgba(31,35,41,.45);z-index:40}
+.modal{position:fixed;left:0;right:0;bottom:0;z-index:41;background:var(--card);border-radius:22px 22px 0 0;padding:22px 18px calc(24px + env(safe-area-inset-bottom));max-height:90vh;overflow:auto}
+@media(min-width:700px){.modal{left:50%;right:auto;bottom:50%;transform:translate(50%,50%);width:560px;border-radius:22px}}
+.modal h3{margin:0 0 16px;font-size:18px}
+.modal-actions{display:flex;gap:10px;margin-top:8px}
+.modal-actions .btn{flex:1}
+
+/* 提示 */
+.toast{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);background:rgba(31,35,41,.9);color:#fff;padding:14px 22px;border-radius:12px;z-index:99;font-size:14px;max-width:80%;text-align:center}
+
+/* 同步状态条 */
+.syncbar{font-size:11px;color:var(--hint);text-align:center;margin:6px 0 14px}
+.syncbar b{color:var(--blue)}
+
+/* 平板/桌面增强 */
+@media(min-width:700px){
+  .wrap{padding:24px 24px 0}
+  .hero{padding:28px}
+  .hero h1{font-size:30px}
+  .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .tabbar{max-width:760px;left:50%;transform:translateX(-50%);border-radius:16px 16px 0 0}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <!-- 首页：错题库 -->
+  <section id="page-home" class="section on">
+    <div class="hero">
+      <div class="eyebrow">FUZHOU · JUNIOR HIGH</div>
+      <h1>我的错题本</h1>
+      <p>拍照收录 · OCR识别 · 按错因归类 · 组卷重练</p>
+      <div class="privacy">数据默认存本机浏览器 · 不上传 · 不含姓名班级</div>
+    </div>
+
+    <div class="quick">
+      <button onclick="App.go('add')"><span class="ic ic-add">+</span>录入错题</button>
+      <button onclick="App.go('review')"><span class="ic ic-practice">练</span>组卷重练</button>
+      <button onclick="App.go('stats')"><span class="ic ic-stats">析</span>错因统计</button>
+    </div>
+
+    <div class="syncbar" id="syncbar">存储模式：<b>本机浏览器</b> · <a href="#" onclick="App.openSync();return false">导入/导出与同步设置</a></div>
+
+    <div class="filters">
+      <input id="f-keyword" type="search" placeholder="搜索题干 / 知识点 / 答案" oninput="App.renderList()">
+      <select id="f-subject" onchange="App.renderList()"><option value="">全部学科</option></select>
+      <select id="f-error" onchange="App.renderList()"><option value="">全部错因</option></select>
+    </div>
+
+    <div id="list-area"></div>
+  </section>
+
+  <!-- 录入页 -->
+  <section id="page-add" class="section">
+    <h2 class="sec-title" id="add-title">录入错题</h2>
+    <div class="card">
+      <div class="field">
+        <label>题目照片</label>
+        <div class="imgbox" id="imgbox" onclick="document.getElementById('file-img').click()">
+          <div class="plus">+</div>
+          <div class="hint">点击拍照 / 选择图片（支持手机相册）</div>
+        </div>
+        <input type="file" id="file-img" accept="image/*" capture="environment" class="hidden" onchange="App.onImage(event)">
+        <img id="preview" class="preview-img hidden" onclick="App.previewImg()">
+        <div class="ocr-bar">
+          <button class="btn btn-ghost" id="ocr-btn" onclick="App.runOCR('general')">识别文字</button>
+          <button class="btn btn-ghost" id="ocr-formula-btn" onclick="App.runOCR('formula')">公式/理科增强</button>
+        </div>
+        <label class="ocr-pre"><input type="checkbox" id="ocr-preprocess" checked> 图像增强（灰度+二值化+放大，推荐开启）</label>
+        <div class="ocr-status" id="ocr-status">拍照后可自动识别文字</div>
+
+        <div class="ocr-review hidden" id="ocr-review">
+          <div class="ocr-review-head">
+            <span>识别结果校对</span>
+            <span class="ocr-conf" id="ocr-conf"></span>
+          </div>
+          <textarea id="ocr-result" placeholder="识别出的文字会出现在这里，可直接修改"></textarea>
+          <div class="sym-title">常用数学符号 · 点击插入</div>
+          <div class="sym-grid">
+            <button type="button" onclick="App.insertSymbol('×')">×</button>
+            <button type="button" onclick="App.insertSymbol('÷')">÷</button>
+            <button type="button" onclick="App.insertSymbol('=')">=</button>
+            <button type="button" onclick="App.insertSymbol('≠')">≠</button>
+            <button type="button" onclick="App.insertSymbol('≤')">≤</button>
+            <button type="button" onclick="App.insertSymbol('≥')">≥</button>
+            <button type="button" onclick="App.insertSymbol('≈')">≈</button>
+            <button type="button" onclick="App.insertSymbol('±')">±</button>
+            <button type="button" onclick="App.insertSymbol('²')">²</button>
+            <button type="button" onclick="App.insertSymbol('³')">³</button>
+            <button type="button" onclick="App.insertSymbol('√')">√</button>
+            <button type="button" onclick="App.insertSymbol('π')">π</button>
+            <button type="button" onclick="App.insertSymbol('∠')">∠</button>
+            <button type="button" onclick="App.insertSymbol('°')">°</button>
+            <button type="button" onclick="App.insertSymbol('△')">△</button>
+            <button type="button" onclick="App.insertSymbol('∴')">∴</button>
+            <button type="button" onclick="App.insertSymbol('∵')">∵</button>
+            <button type="button" onclick="App.insertSymbol('∝')">∝</button>
+          </div>
+          <div class="ocr-actions">
+            <button class="btn btn-ghost" onclick="App.applyOCR(true)">追加到题干</button>
+            <button class="btn btn-primary" onclick="App.applyOCR(false)">填入题干</button>
+          </div>
+          <div class="ocr-tip">提示：Tesseract 无法解析分数、根号等复杂版式，请用上方符号面板手动补正。</div>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>题干 <span class="req">*</span></label>
+        <textarea id="f-question" placeholder="输入或OCR识别题干文字（有照片可不填）"></textarea>
+      </div>
+
+      <div class="field-row">
+        <div class="field"><label>学科</label><select id="f-subject2"></select></div>
+        <div class="field"><label>年级</label><select id="f-grade"><option>初一</option><option>初二</option><option>初三</option></select></div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>错因</label><select id="f-errtype"></select></div>
+        <div class="field"><label>难度</label><select id="f-diff"><option>基础</option><option>中等</option><option>较难</option></select></div>
+      </div>
+
+      <div class="field"><label>我的错答</label><input id="f-myanswer" placeholder="当时写错的答案"></div>
+      <div class="field"><label>正确答案 / 解析</label><textarea id="f-correct" placeholder="正确答案或简要解析"></textarea></div>
+      <div class="field"><label>知识点标签</label><input id="f-knowledge" placeholder="用顿号分隔，如：二次函数、配方法"></div>
+      <div class="field"><label>来源</label><input id="f-source" placeholder="如：期中数学试卷 第12题"></div>
+      <div class="field" id="mastery-field"><label>掌握状态</label><select id="f-mastery"><option value="unmastered">未掌握</option><option value="reviewing">巩固中</option><option value="mastered">已掌握</option></select></div>
+
+      <div class="modal-actions">
+        <button class="btn btn-primary" id="save-btn" onclick="App.save()">保存</button>
+        <button class="btn btn-danger hidden" id="del-btn" onclick="App.del()">删除</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 统计页 -->
+  <section id="page-stats" class="section">
+    <h2 class="sec-title">错因统计</h2>
+    <div id="stats-area"></div>
+  </section>
+
+  <!-- 练习页 -->
+  <section id="page-review" class="section">
+    <h2 class="sec-title">组卷重练</h2>
+    <div id="review-area"></div>
+  </section>
+</div>
+
+<!-- 底部导航 -->
+<nav class="tabbar">
+  <button id="tab-home" class="on" onclick="App.go('home')"><span class="ti">▤</span>错题库</button>
+  <button id="tab-add" onclick="App.go('add')"><span class="ti">＋</span>录入</button>
+  <button id="tab-review" onclick="App.go('review')"><span class="ti">✎</span>重练</button>
+  <button id="tab-stats" onclick="App.go('stats')"><span class="ti">▦</span>统计</button>
+</nav>
+
+<!-- 同步/导入导出弹窗 -->
+<div class="modal-mask hidden" id="sync-mask" onclick="App.closeSync()"></div>
+<div class="modal hidden" id="sync-modal">
+  <h3>数据导入 / 导出</h3>
+  <p style="font-size:13px;color:var(--muted);margin:0 0 16px">
+    当前数据存在本机浏览器，换设备不会自动同步。可导出 JSON 文件，在另一台设备导入实现迁移。
+  </p>
+  <div class="modal-actions" style="margin-bottom:10px">
+    <button class="btn btn-primary" onclick="App.exportJSON()">导出 JSON</button>
+    <button class="btn btn-ghost" onclick="document.getElementById('file-import').click()">导入 JSON</button>
+  </div>
+  <input type="file" id="file-import" accept="application/json,.json" class="hidden" onchange="App.importJSON(event)">
+  <div id="sync-cloud" class="hidden" style="border-top:1px solid var(--line);padding-top:14px;margin-top:8px">
+    <p style="font-size:12px;color:var(--muted)">已配置云同步，数据将在多设备间自动同步。</p>
+  </div>
+  <button class="btn btn-ghost btn-block" onclick="App.closeSync()">关闭</button>
+</div>
+
+<div class="toast hidden" id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
