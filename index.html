@@ -31,7 +31,7 @@ body{
 .hero .privacy{margin-top:12px;font-size:11px;opacity:.75;border-top:1px solid rgba(255,255,255,.25);padding-top:10px}
 
 /* 快捷入口 */
-.quick{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px}
+.quick{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px}
 .quick button{
   border:0;border-radius:16px;padding:16px 6px;background:var(--card);box-shadow:var(--shadow);
   display:flex;flex-direction:column;align-items:center;gap:8px;cursor:pointer;color:var(--ink);
@@ -39,7 +39,7 @@ body{
 }
 .quick button:active{transform:scale(.96)}
 .quick .ic{width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:19px;font-weight:700;color:#fff}
-.ic-add{background:var(--blue)} .ic-practice{background:#7c5cd6} .ic-stats{background:#0f9d75}
+.ic-add{background:var(--blue)} .ic-practice{background:#7c5cd6} .ic-stats{background:#0f9d75} .ic-bank{background:#d46b08}
 
 /* 搜索筛选 */
 .filters{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
@@ -106,6 +106,9 @@ body{
 .imgbox{border:2px dashed #c9d2e3;border-radius:14px;background:#f8faff;padding:18px;text-align:center;cursor:pointer}
 .imgbox .plus{font-size:34px;color:var(--blue);font-weight:300;line-height:1}
 .imgbox .hint{font-size:12px;color:var(--hint);margin-top:6px}
+.cam-row{text-align:center;margin-top:8px}
+.cam-btn{border:1px solid var(--line);background:#fff;color:var(--blue);border-radius:10px;padding:8px 16px;font-size:13px;cursor:pointer}
+.cam-btn:active{background:var(--blue-l)}
 .preview-img{width:100%;border-radius:12px;margin-top:10px;display:block}
 .ocr-bar{display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap}
 .btn{border:0;border-radius:11px;padding:11px 18px;font-size:14px;font-weight:600;cursor:pointer;transition:opacity .12s}
@@ -120,6 +123,14 @@ body{
 .ocr-review{margin-top:12px;background:var(--blue-l);border-radius:12px;padding:12px}
 .ocr-review-head{display:flex;justify-content:space-between;align-items:center;font-size:12px;font-weight:600;color:var(--blue-d);margin-bottom:8px}
 .ocr-conf{font-weight:500;color:var(--muted)}
+.ocr-cloud-cfg{margin-top:12px;background:#fff7e6;border-radius:12px;padding:12px}
+.ocr-cfg-row{display:flex;align-items:center;gap:8px;margin-bottom:9px;flex-wrap:wrap}
+.ocr-cfg-row label{font-size:12px;color:var(--muted);width:60px;flex-shrink:0}
+.ocr-cfg-row select,.ocr-cfg-row input{flex:1;min-width:120px;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:13px;font-family:inherit;color:var(--ink);background:#fff;outline:none}
+.ocr-cfg-tip{font-size:11px;color:#ad6800;line-height:1.5;margin-top:4px}
+.btn-mini{padding:8px 12px;font-size:12px;background:var(--blue);color:#fff;border-radius:8px;border:0;cursor:pointer}
+.bank-note{background:var(--blue-l);color:var(--blue-d);font-size:12px;border-radius:10px;padding:10px 12px;margin-bottom:12px}
+.bank-card .qtext{-webkit-line-clamp:5}
 .ocr-review textarea{width:100%;min-height:110px;border:1px solid #c9d6f5;border-radius:10px;padding:10px;font-size:14px;font-family:inherit;color:var(--ink);background:#fff;outline:none;resize:vertical}
 .ocr-review textarea:focus{border-color:var(--blue)}
 .sym-title{font-size:11px;color:var(--muted);margin:10px 0 6px}
@@ -193,6 +204,7 @@ body{
       <button onclick="App.go('add')"><span class="ic ic-add">+</span>录入错题</button>
       <button onclick="App.go('review')"><span class="ic ic-practice">练</span>组卷重练</button>
       <button onclick="App.go('stats')"><span class="ic ic-stats">析</span>错因统计</button>
+      <button onclick="App.go('bank')"><span class="ic ic-bank">库</span>公共题库</button>
     </div>
 
     <div class="syncbar" id="syncbar">存储模式：<b>本机浏览器</b> · <a href="#" onclick="App.openSync();return false">导入/导出与同步设置</a></div>
@@ -214,15 +226,42 @@ body{
         <label>题目照片</label>
         <div class="imgbox" id="imgbox" onclick="document.getElementById('file-img').click()">
           <div class="plus">+</div>
-          <div class="hint">点击拍照 / 选择图片（支持手机相册）</div>
+          <div class="hint">点击从相册 / 本机选择图片</div>
         </div>
-        <input type="file" id="file-img" accept="image/*" capture="environment" class="hidden" onchange="App.onImage(event)">
+        <input type="file" id="file-img" accept="image/*" class="hidden" onchange="App.onImage(event)">
+        <div class="cam-row"><button type="button" class="cam-btn" onclick="document.getElementById('file-cam').click()">📷 直接拍照</button></div>
+        <input type="file" id="file-cam" accept="image/*" capture="environment" class="hidden" onchange="App.onImage(event)">
         <img id="preview" class="preview-img hidden" onclick="App.previewImg()">
         <div class="ocr-bar">
-          <button class="btn btn-ghost" id="ocr-btn" onclick="App.runOCR('general')">识别文字</button>
-          <button class="btn btn-ghost" id="ocr-formula-btn" onclick="App.runOCR('formula')">公式/理科增强</button>
+          <button class="btn btn-ghost" id="ocr-btn" onclick="App.runOCR('general')">本地识别</button>
+          <button class="btn btn-ghost" id="ocr-formula-btn" onclick="App.runOCR('formula')">本地·公式增强</button>
+          <button class="btn btn-primary" id="ocr-cloud-btn" onclick="App.runCloudOCR()">☁ 云端识别（更准）</button>
         </div>
         <label class="ocr-pre"><input type="checkbox" id="ocr-preprocess" checked> 图像增强（灰度+二值化+放大，推荐开启）</label>
+        <div class="ocr-cloud-cfg">
+          <div class="ocr-cfg-row">
+            <label>识别语言</label>
+            <select id="ocr-lang">
+              <option value="chs">简体中文</option>
+              <option value="cht">繁体中文</option>
+              <option value="chs+eng">中英混合</option>
+              <option value="eng">英文</option>
+            </select>
+          </div>
+          <div class="ocr-cfg-row">
+            <label>引擎</label>
+            <select id="ocr-engine">
+              <option value="2">引擎2（神经网络·推荐）</option>
+              <option value="1">引擎1（快速）</option>
+            </select>
+          </div>
+          <div class="ocr-cfg-row">
+            <label>API Key</label>
+            <input type="text" id="ocr-key" placeholder="留空用公共测试key（有限速）">
+            <button class="btn btn-mini" onclick="App.saveOCRKey()">保存</button>
+          </div>
+          <div class="ocr-cfg-tip">默认公共 key 仅供测试、有速率限制。识别率高建议到 ocr.space 免费申请个人 key 填入（仅存本机）。云端识别会把照片上传到第三方。</div>
+        </div>
         <div class="ocr-status" id="ocr-status">拍照后可自动识别文字</div>
 
         <div class="ocr-review hidden" id="ocr-review">
@@ -297,6 +336,16 @@ body{
   <section id="page-review" class="section">
     <h2 class="sec-title">组卷重练</h2>
     <div id="review-area"></div>
+  </section>
+
+  <!-- 公共题库页 -->
+  <section id="page-bank" class="section">
+    <h2 class="sec-title">公共题库</h2>
+    <div class="filters">
+      <select id="bank-subject" onchange="App.renderBank()"><option value="">全部学科</option></select>
+      <button class="btn btn-ghost" onclick="App.loadBank()">刷新题库</button>
+    </div>
+    <div id="bank-area"></div>
   </section>
 </div>
 
