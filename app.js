@@ -9,6 +9,10 @@
   var ERROR_TYPES = ['概念不清','计算失误','审题偏差','粗心马虎','方法不会'];
   var MASTERY = { unmastered:'未掌握', reviewing:'巩固中', mastered:'已掌握' };
   var STORAGE_KEY = 'cuoti-web-v1';
+  var OCR_KEY_STORAGE = 'cuoti-ocrspace-key';   // 用户自填的云端OCR key（仅存本机）
+  var OCR_CONSENT_STORAGE = 'cuoti-cloud-ocr-consent';
+  var OCRSPACE_DEFAULT_KEY = 'helloworld';     // 官方公共测试key（有速率限制，仅测试用）
+  var BANK_URL = 'questions.json';             // 公共题库（只读，不含学生数据）
 
   /* ============ 数据层 ============ */
   var Store = {
@@ -84,7 +88,12 @@
       this.fillSelect('f-subject2', SUBJECTS);
       this.fillSelect('f-error', ERROR_TYPES, '全部错因');
       this.fillSelect('f-errtype', ERROR_TYPES);
+      this.fillSelect('bank-subject', SUBJECTS, '全部学科');
+      var savedKey = localStorage.getItem(OCR_KEY_STORAGE) || '';
+      var keyInput = document.getElementById('ocr-key');
+      if (keyInput) keyInput.value = savedKey;
       this.renderList();
+      this.loadBank();
       this.loadFromQuery();
     },
 
@@ -102,13 +111,14 @@
     },
 
     go: function (page) {
-      var pages = ['home','add','review','stats'];
-      pages.forEach(function(p){ document.getElementById('page-'+p).classList.toggle('on', p===page); });
-      ['home','add','review','stats'].forEach(function(p){ document.getElementById('tab-'+p).classList.toggle('on', p===page); });
+      var pages = ['home','add','review','stats','bank'];
+      pages.forEach(function(p){ var el=document.getElementById('page-'+p); if(el) el.classList.toggle('on', p===page); });
+      ['home','add','review','stats'].forEach(function(p){ var el=document.getElementById('tab-'+p); if(el) el.classList.toggle('on', p===page); });
       window.scrollTo(0,0);
       if (page==='home') this.renderList();
       if (page==='stats') this.renderStats();
       if (page==='review') this.renderReview();
+      if (page==='bank') this.renderBank();
       if (page==='add' && !this.editingId) this.resetForm();
     },
 
@@ -470,6 +480,141 @@
       var pos = s + sym.length;
       el.focus();
       try { el.setSelectionRange(pos, pos); } catch (err) {}
+    },
+
+    /* ---------- 云端 OCR（OCR.space，识别率更高，但照片会上传到第三方） ---------- */
+    getOCRKey: function () {
+      return (localStorage.getItem(OCR_KEY_STORAGE) || '').trim() || OCRSPACE_DEFAULT_KEY;
+    },
+    saveOCRKey: function () {
+      var v = (document.getElementById('ocr-key').value || '').trim();
+      if (v) {
+        localStorage.setItem(OCR_KEY_STORAGE, v);
+        this.toast('已保存 API Key（仅存本机）');
+      } else {
+        localStorage.removeItem(OCR_KEY_STORAGE);
+        this.toast('已清除，恢复使用公共测试 key');
+      }
+    },
+
+    runCloudOCR: function () {
+      var self = this;
+      if (!this.currentImage) { this.toast('请先选择照片'); return; }
+
+      // 首次使用需知情同意（照片将上传到第三方服务器）
+      var consented = localStorage.getItem(OCR_CONSENT_STORAGE) === '1';
+      if (!consented) {
+        var ok = confirm('云端识别说明\n\n· 题目照片将上传到第三方服务 OCR.space 进行识别\n· 识别完成后网页不会保存照片副本，但第三方会短暂处理该图片\n· 若不希望照片外传，请使用「本地识别」\n\n是否同意并继续？');
+        if (!ok) return;
+        localStorage.setItem(OCR_CONSENT_STORAGE, '1');
+      }
+
+      var btn = document.getElementById('ocr-cloud-btn');
+      var status = document.getElementById('ocr-status');
+      var confEl = document.getElementById('ocr-conf');
+      var review = document.getElementById('ocr-review');
+      btn.disabled = true; review.classList.add('hidden'); confEl.textContent = '';
+      status.textContent = '正在上传并识别（云端）…';
+
+      // dataURL → base64（OCR.space 接受带 data:image 前缀的 base64Image）
+      var base64 = this.currentImage;
+      var lang = (document.getElementById('ocr-lang') || {}).value || 'chs';
+      var engine = (document.getElementById('ocr-engine') || {}).value || '2';
+      var form = new FormData();
+      form.append('apikey', this.getOCRKey());
+      form.append('base64Image', base64);
+      form.append('language', lang);
+      form.append('isOverlayRequired', 'false');
+      form.append('OCREngine', engine);
+      form.append('scale', 'true');
+      form.append('detectOrientation', 'true');
+
+      fetch('https://api.ocr.space/parse/image', { method: 'POST', body: form })
+        .then(function (r) {
+          if (!r.ok) throw new Error('HTTP ' + r.status);
+          return r.json();
+        })
+        .then(function (res) {
+          if (res.IsErroredOnProcessing) {
+            var em = (res.ErrorMessage && (Array.isArray(res.ErrorMessage) ? res.ErrorMessage.join('；') : res.ErrorMessage)) || '识别失败';
+            throw new Error(em);
+          }
+          var results = res.ParsedResults || [];
+          var raw = results.map(function (x) { return x.ParsedText || ''; }).join('\n');
+          var text = self.postProcessOCR(raw, 'general').replace(/\n{2,}/g, '\n').trim();
+          if (!text) { status.textContent = '未识别到文字，请换张更清晰的照片'; self.toast('未识别到文字'); return; }
+          document.getElementById('ocr-result').value = text;
+          review.classList.remove('hidden');
+          confEl.innerHTML = '<b style="color:var(--green)">云端识别完成</b>' +
+            (self.getOCRKey() === OCRSPACE_DEFAULT_KEY ? ' · 使用公共测试key（有速率限制）' : '');
+          status.textContent = '识别完成，请在下方校对后填入题干';
+          self.toast('云端识别完成，请校对');
+          try { document.getElementById('ocr-result').scrollIntoView({ behavior:'smooth', block:'center' }); } catch (e) {}
+        })
+        .catch(function (err) {
+          var msg = String(err && err.message || err);
+          status.textContent = '云端识别失败：' + msg.slice(0, 40);
+          self.toast('云端识别失败，可改用本地识别');
+          console.error(err);
+        })
+        .then(function () { btn.disabled = false; });
+    },
+
+    /* ---------- 公共题库（GitHub 只读 JSON，不含学生数据） ---------- */
+    loadBank: function () {
+      var self = this;
+      this.bankItems = [];
+      var area = document.getElementById('bank-area');
+      if (!area) return;
+      area.innerHTML = '<div class="state"><div class="big">◌</div><h3>正在加载公共题库…</h3></div>';
+      fetch(BANK_URL + '?t=' + Date.now())
+        .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+        .then(function (data) {
+          self.bankItems = Array.isArray(data.questions) ? data.questions : (Array.isArray(data) ? data : []);
+          self.renderBank();
+        })
+        .catch(function (err) {
+          area.innerHTML = '<div class="state"><div class="big">☁</div><h3>题库加载失败</h3><p>请检查网络后重试</p>' +
+            '<button class="btn btn-ghost" style="margin-top:14px" onclick="App.loadBank()">重新加载</button></div>';
+        });
+    },
+
+    renderBank: function () {
+      var area = document.getElementById('bank-area');
+      if (!area) return;
+      var subject = (document.getElementById('bank-subject') || {}).value || '';
+      var list = [];
+      for (var i = 0; i < this.bankItems.length; i++) {
+        if (!subject || this.bankItems[i].subject === subject) list.push({ idx: i, q: this.bankItems[i] });
+      }
+      if (!list.length) {
+        area.innerHTML = '<div class="state"><div class="big">◌</div><h3>暂无题目</h3><p>换个学科试试</p></div>';
+        return;
+      }
+      var html = '<div class="bank-note">公共题库为只读示例，可一键加入本机错题库；不含任何学生个人信息。</div>';
+      html += list.map(function (row) {
+        var q = row.q;
+        return '<div class="card bank-card">'+
+          '<div class="card-head"><span class="badge b-subject">'+esc(q.subject||'未分类')+'</span>'+
+          '<span class="badge b-error">'+esc(q.errorType||'例题')+'</span></div>'+
+          '<div class="card-body"><div class="card-text"><div class="qtext">'+esc(q.questionText||'')+'</div>'+
+          '<div class="tags">'+esc((q.knowledgePoints||[]).join(' · '))+'</div></div></div>'+
+          '<button class="btn btn-ghost btn-block" style="margin-top:10px" onclick="App.addBankItem('+row.idx+')">＋ 加入我的错题本</button>'+
+        '</div>';
+      }).join('');
+      area.innerHTML = html;
+    },
+
+    addBankItem: function (idx) {
+      var q = this.bankItems[idx];
+      if (!q) return;
+      Store.create({
+        imagePath: '', questionText: q.questionText || '', subject: q.subject || '数学',
+        grade: q.grade || '初一', errorType: q.errorType || '概念不清', difficulty: q.difficulty || '基础',
+        myAnswer: '', correctAnswer: q.correctAnswer || '', knowledgePoints: q.knowledgePoints || [],
+        source: q.source || '公共题库', mastery: 'unmastered', reviewCount: 0
+      });
+      this.toast('已加入本机错题库');
     },
 
     /* ---------- 统计 ---------- */
