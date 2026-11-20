@@ -64,8 +64,18 @@ body{
 .card-body{display:flex;gap:12px;margin-top:12px;align-items:flex-start}
 .thumb{width:76px;height:76px;object-fit:cover;border-radius:10px;background:#f2f3f5;flex-shrink:0;cursor:zoom-in}
 .card-text{flex:1;min-width:0}
-.qtext{font-size:14px;line-height:1.5;color:var(--ink);word-break:break-word;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.qtext{font-size:14px;line-height:1.5;color:var(--ink);word-break:break-word}
+.qtext.clamp{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.qtext img{max-width:100%;height:auto;border-radius:6px;margin:4px 0}
+.qtext sup{font-size:.75em}.qtext sub{font-size:.75em}
 .tags{font-size:11px;color:var(--hint);margin-top:6px}
+/* 卡片内同步展示的字段 */
+.detail-row{display:flex;gap:8px;margin-top:10px;font-size:13px;line-height:1.5}
+.detail-row .dk{color:var(--hint);flex-shrink:0;width:62px;font-size:12px;padding-top:1px}
+.detail-row .dv{flex:1;color:var(--ink);word-break:break-word;min-width:0}
+.detail-row.wrong .dv{color:var(--red)}
+.detail-row.right .dv{color:var(--green)}
+.detail-row .dv em{color:inherit}
 .card-foot{display:flex;justify-content:space-between;align-items:center;margin-top:12px;padding-top:10px;border-top:1px solid var(--line);font-size:11px;color:var(--hint)}
 .card-foot .edit{color:var(--blue);font-weight:600}
 
@@ -99,6 +109,16 @@ body{
 }
 .field textarea{min-height:90px;resize:vertical}
 .field input:focus,.field select:focus,.field textarea:focus{border-color:var(--blue)}
+.field-tip{font-size:11px;font-weight:400;color:var(--hint)}
+/* 富文本题干编辑器 */
+.rich-toolbar{display:flex;gap:4px;flex-wrap:wrap;border:1px solid var(--line);border-bottom:0;border-radius:12px 12px 0 0;padding:6px 8px;background:#f8faff}
+.rich-toolbar button{min-width:32px;height:30px;border:1px solid transparent;background:#fff;border-radius:7px;color:var(--ink);font-size:14px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;padding:0 7px}
+.rich-toolbar button:active{background:var(--blue-l);border-color:var(--blue)}
+.rich-editor{min-height:120px;border:1px solid var(--line);border-radius:0 0 12px 12px;padding:12px;font-size:15px;line-height:1.65;color:var(--ink);background:var(--card);outline:none;word-break:break-word;overflow-x:auto}
+.rich-editor:focus{border-color:var(--blue)}
+.rich-editor:empty:before{content:attr(data-placeholder);color:var(--hint)}
+.rich-editor img{max-width:100%;height:auto;border-radius:8px;margin:6px 0}
+.rich-editor sup{font-size:.75em}.rich-editor sub{font-size:.75em}
 .field-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 @media(max-width:420px){.field-row{grid-template-columns:1fr}}
 
@@ -159,6 +179,8 @@ body{
 .practice-q img{width:100%;border-radius:12px;margin:12px 0}
 .q-label{font-size:11px;color:var(--hint);margin-top:14px}
 .q-value{font-size:15px;line-height:1.6;margin-top:3px;word-break:break-word}
+.q-value img{max-width:100%;height:auto;border-radius:8px}
+.q-value sup{font-size:.75em}.q-value sub{font-size:.75em}
 .q-wrong{color:var(--red)}
 .answer{background:#eaf7ef;border-left:4px solid #52c41a;border-radius:10px;padding:14px;margin-top:12px}
 .judge{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
@@ -211,7 +233,7 @@ body{
 
     <div class="filters">
       <input id="f-keyword" type="search" placeholder="搜索题干 / 知识点 / 答案" oninput="App.renderList()">
-      <select id="f-subject" onchange="App.renderList()"><option value="">全部学科</option></select>
+      <select id="f-diff-filter" onchange="App.renderList()"><option value="">全部难度</option></select>
       <select id="f-error" onchange="App.renderList()"><option value="">全部错因</option></select>
     </div>
 
@@ -233,11 +255,8 @@ body{
         <input type="file" id="file-cam" accept="image/*" capture="environment" class="hidden" onchange="App.onImage(event)">
         <img id="preview" class="preview-img hidden" onclick="App.previewImg()">
         <div class="ocr-bar">
-          <button class="btn btn-ghost" id="ocr-btn" onclick="App.runOCR('general')">本地识别</button>
-          <button class="btn btn-ghost" id="ocr-formula-btn" onclick="App.runOCR('formula')">本地·公式增强</button>
-          <button class="btn btn-primary" id="ocr-cloud-btn" onclick="App.runCloudOCR()">☁ 云端识别（更准）</button>
+          <button class="btn btn-primary" id="ocr-cloud-btn" onclick="App.runCloudOCR()">☁ 云端识别题干（更准）</button>
         </div>
-        <label class="ocr-pre"><input type="checkbox" id="ocr-preprocess" checked> 图像增强（灰度+二值化+放大，推荐开启）</label>
         <div class="ocr-cloud-cfg">
           <div class="ocr-cfg-row">
             <label>识别语言</label>
@@ -295,19 +314,24 @@ body{
             <button class="btn btn-ghost" onclick="App.applyOCR(true)">追加到题干</button>
             <button class="btn btn-primary" onclick="App.applyOCR(false)">填入题干</button>
           </div>
-          <div class="ocr-tip">提示：Tesseract 无法解析分数、根号等复杂版式，请用上方符号面板手动补正。</div>
+          <div class="ocr-tip">提示：云端 OCR 对分数、根号等复杂版式识别有限，请用上方符号面板手动补正。</div>
         </div>
       </div>
 
       <div class="field">
-        <label>题干 <span class="req">*</span></label>
-        <textarea id="f-question" placeholder="输入或OCR识别题干文字（有照片可不填）"></textarea>
+        <label>题干 <span class="req">*</span> <span class="field-tip">支持 HTML 富文本，可直接粘贴带格式的题目</span></label>
+        <div class="rich-toolbar">
+          <button type="button" onmousedown="event.preventDefault();App.richCmd('bold')" title="加粗"><b>B</b></button>
+          <button type="button" onmousedown="event.preventDefault();App.richCmd('underline')" title="下划线"><u>U</u></button>
+          <button type="button" onmousedown="event.preventDefault();App.richCmd('italic')" title="斜体"><i>I</i></button>
+          <button type="button" onmousedown="event.preventDefault();App.richCmd('superscript')" title="上标">x²</button>
+          <button type="button" onmousedown="event.preventDefault();App.richCmd('subscript')" title="下标">x₂</button>
+          <button type="button" onmousedown="event.preventDefault();App.richCmd('foreColor','#d4380d')" title="标红" style="color:#d4380d">A</button>
+          <button type="button" onmousedown="event.preventDefault();App.richCmd('removeFormat')" title="清除格式">⌫</button>
+        </div>
+        <div id="f-question" class="rich-editor" contenteditable="true" data-placeholder="输入 / 粘贴题干（支持 HTML 格式），或拍照后点云端识别填入…"></div>
       </div>
 
-      <div class="field-row">
-        <div class="field"><label>学科</label><select id="f-subject2"></select></div>
-        <div class="field"><label>年级</label><select id="f-grade"><option>初一</option><option>初二</option><option>初三</option></select></div>
-      </div>
       <div class="field-row">
         <div class="field"><label>错因</label><select id="f-errtype"></select></div>
         <div class="field"><label>难度</label><select id="f-diff"><option>基础</option><option>中等</option><option>较难</option></select></div>
@@ -320,7 +344,7 @@ body{
       <div class="field" id="mastery-field"><label>掌握状态</label><select id="f-mastery"><option value="unmastered">未掌握</option><option value="reviewing">巩固中</option><option value="mastered">已掌握</option></select></div>
 
       <div class="modal-actions">
-        <button class="btn btn-primary" id="save-btn" onclick="App.save()">保存</button>
+        <button class="btn btn-primary" id="save-btn" onclick="App.save()">收入错题库</button>
         <button class="btn btn-danger hidden" id="del-btn" onclick="App.del()">删除</button>
       </div>
     </div>
@@ -377,7 +401,6 @@ body{
 
 <div class="toast hidden" id="toast"></div>
 
-<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
