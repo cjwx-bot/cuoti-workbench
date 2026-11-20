@@ -205,7 +205,7 @@
       document.getElementById('preview').classList.add('hidden');
       document.getElementById('imgbox').classList.remove('hidden');
       document.getElementById('del-btn').classList.add('hidden');
-      document.getElementById('ocr-status').textContent = '拍照后可自动识别文字';
+      document.getElementById('ocr-status').textContent = '拍照后点云端识别，结果会自动填入题干';
       this.clearOCRReview();
     },
 
@@ -242,7 +242,7 @@
         document.getElementById('preview').classList.add('hidden');
         document.getElementById('imgbox').classList.remove('hidden');
       }
-      document.getElementById('ocr-status').textContent = '拍照后可自动识别文字';
+      document.getElementById('ocr-status').textContent = '拍照后点云端识别，结果会自动填入题干';
       this.clearOCRReview();
       this.go('add');
     },
@@ -352,15 +352,25 @@
       return s;
     },
 
-    // 把校对区结果填入富文本题干（replace）或追加（append），按纯文本转义、换行转 <br>
+    // 把纯文本以 HTML 富文本形式写入题干：转义防注入，换行转 <br>，全部内容不截断
+    fillQuestionHtml: function (text, append) {
+      var el = document.getElementById('f-question');
+      if (!el || !text) return;
+      var html = sanitizeRichHtml(esc(text).replace(/\n/g, '<br>'));
+      if (append && el.innerHTML.trim()) {
+        el.innerHTML = el.innerHTML.replace(/(<br\s*\/?\s*>|\s)+$/, '') + '<br>' + html;
+      } else {
+        el.innerHTML = html;
+      }
+    },
+
+    // 把校对区结果填入富文本题干（replace）或追加（append）
     applyOCR: function (append) {
       var text = document.getElementById('ocr-result').value.trim();
       if (!text) { this.toast('校对区为空'); return; }
-      var el = document.getElementById('f-question');
-      var html = esc(text).replace(/\n/g, '<br>');
-      el.innerHTML = append ? (el.innerHTML.trim() ? el.innerHTML.replace(/(<br\s*\/?\s*>|\s)+$/, '') + '<br>' + html : html) : html;
+      this.fillQuestionHtml(text, append);
       this.toast(append ? '已追加到题干' : '已填入题干');
-      try { el.focus(); } catch (e) {}
+      try { document.getElementById('f-question').focus(); } catch (e) {}
     },
 
     // 富文本工具栏命令（加粗/上下标/标红等）
@@ -442,13 +452,20 @@
           var raw = results.map(function (x) { return x.ParsedText || ''; }).join('\n');
           var text = self.postProcessOCR(raw, 'general').replace(/\n{2,}/g, '\n').trim();
           if (!text) { status.textContent = '未识别到文字，请换张更清晰的照片'; self.toast('未识别到文字'); return; }
+          // 关键：识别后自动把全部内容以 HTML 富文本形式填入题干，并滚动到题干让用户看到
+          self.fillQuestionHtml(text, false);
           document.getElementById('ocr-result').value = text;
           review.classList.remove('hidden');
-          confEl.innerHTML = '<b style="color:var(--green)">云端识别完成</b>' +
+          confEl.innerHTML = '<b style="color:var(--green)">云端识别完成 · 已自动填入题干</b>' +
             (self.getOCRKey() === OCRSPACE_DEFAULT_KEY ? ' · 使用公共测试key（有速率限制）' : '');
-          status.textContent = '识别完成，请在下方校对后填入题干';
-          self.toast('云端识别完成，请校对');
-          try { document.getElementById('ocr-result').scrollIntoView({ behavior:'smooth', block:'center' }); } catch (e) {}
+          status.textContent = '识别完成，全部内容已填入下方题干';
+          self.toast('识别完成，已填入题干');
+          try {
+            var q = document.getElementById('f-question');
+            q.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            q.classList.add('ocr-flash');
+            setTimeout(function () { q.classList.remove('ocr-flash'); }, 1200);
+          } catch (e) {}
         })
         .catch(function (err) {
           var msg = String(err && err.message || err);
