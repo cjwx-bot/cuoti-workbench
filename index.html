@@ -119,6 +119,8 @@ body{
 .rich-editor:empty:before{content:attr(data-placeholder);color:var(--hint)}
 .rich-editor img{max-width:100%;height:auto;border-radius:8px;margin:6px 0}
 .rich-editor sup{font-size:.75em}.rich-editor sub{font-size:.75em}
+.rich-editor.ocr-flash{animation:ocrFlash 1.2s ease}
+@keyframes ocrFlash{0%,100%{box-shadow:none}30%,70%{box-shadow:0 0 0 3px rgba(24,96,214,.35);background:#f0f6ff}}
 .field-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 @media(max-width:420px){.field-row{grid-template-columns:1fr}}
 
@@ -281,7 +283,7 @@ body{
           </div>
           <div class="ocr-cfg-tip">默认公共 key 仅供测试、有速率限制。识别率高建议到 ocr.space 免费申请个人 key 填入（仅存本机）。云端识别会把照片上传到第三方。</div>
         </div>
-        <div class="ocr-status" id="ocr-status">拍照后可自动识别文字</div>
+        <div class="ocr-status" id="ocr-status">拍照后点云端识别，结果会自动填入题干</div>
 
         <div class="ocr-review hidden" id="ocr-review">
           <div class="ocr-review-head">
@@ -329,7 +331,7 @@ body{
           <button type="button" onmousedown="event.preventDefault();App.richCmd('foreColor','#d4380d')" title="标红" style="color:#d4380d">A</button>
           <button type="button" onmousedown="event.preventDefault();App.richCmd('removeFormat')" title="清除格式">⌫</button>
         </div>
-        <div id="f-question" class="rich-editor" contenteditable="true" data-placeholder="输入 / 粘贴题干（支持 HTML 格式），或拍照后点云端识别填入…"></div>
+        <div id="f-question" class="rich-editor" contenteditable="true" data-placeholder="输入 / 粘贴题干（支持 HTML 格式），或拍照后点云端识别，全部内容会自动填到这里…"></div>
       </div>
 
       <div class="field-row">
