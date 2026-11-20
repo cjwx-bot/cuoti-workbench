@@ -6,6 +6,7 @@
   'use strict';
 
   var SUBJECTS = ['语文','数学','英语','物理','化学','生物','政治','历史','地理'];
+  var DIFFICULTIES = ['基础','中等','较难'];
   var ERROR_TYPES = ['概念不清','计算失误','审题偏差','粗心马虎','方法不会'];
   var MASTERY = { unmastered:'未掌握', reviewing:'巩固中', mastered:'已掌握' };
   var STORAGE_KEY = 'cuoti-web-v1';
@@ -80,12 +81,10 @@
   var App = {
     editingId: '',
     currentImage: '',
-    ocrWorker: null,
     quizQueue: [], quizIndex: 0, quizShowAnswer: false, quizResult:{mastered:0,again:0},
 
     init: function () {
-      this.fillSelect('f-subject', SUBJECTS, '全部学科');
-      this.fillSelect('f-subject2', SUBJECTS);
+      this.fillSelect('f-diff-filter', DIFFICULTIES, '全部难度');
       this.fillSelect('f-error', ERROR_TYPES, '全部错因');
       this.fillSelect('f-errtype', ERROR_TYPES);
       this.fillSelect('bank-subject', SUBJECTS, '全部学科');
@@ -132,12 +131,12 @@
     /* ---------- 列表 ---------- */
     renderList: function () {
       var keyword = (document.getElementById('f-keyword')||{}).value || '';
-      var subject = (document.getElementById('f-subject')||{}).value || '';
+      var diffFilter = (document.getElementById('f-diff-filter')||{}).value || '';
       var error = (document.getElementById('f-error')||{}).value || '';
       keyword = keyword.trim().toLowerCase();
 
       var items = Store.list().filter(function(it){
-        if (subject && it.subject!==subject) return false;
+        if (diffFilter && it.difficulty!==diffFilter) return false;
         if (error && it.errorType!==error) return false;
         if (keyword) {
           var hay = [it.questionText,it.myAnswer,it.correctAnswer].concat(it.knowledgePoints||[]).join(' ').toLowerCase();
@@ -152,25 +151,32 @@
         return;
       }
       var html = items.map(function(it){
-        var tags = (it.knowledgePoints||[]).slice(0,3).join(' · ') || '暂无知识点标签';
-        var q = it.questionText || '（见题目照片）';
-        var qShow = q.length>90 ? q.slice(0,90)+'…' : q;
+        var tags = (it.knowledgePoints||[]).slice(0,3).join(' · ');
+        // 题干：新版存 questionHtml 直接按富文本渲染；老数据用纯文本转义兜底
+        var qHtml = it.questionHtml ? sanitizeRichHtml(it.questionHtml) : esc(it.questionText || '');
+        if (!qHtml) qHtml = '<span style="color:var(--hint)">（见题目照片）</span>';
         var mKey = it.mastery || 'unmastered';
         var mClass = mKey==='mastered'?'b-mastered':(mKey==='reviewing'?'b-reviewing':'b-unmastered');
         var d = new Date(it.updatedAt||Date.now());
         var time = (d.getMonth()+1)+'-'+d.getDate();
         var img = it.imagePath ? '<img class="thumb" src="'+it.imagePath+'" onclick="event.stopPropagation();App.viewImage(\''+it.id+'\')">' : '';
+        // 同步展示字段：错因 / 难度 / 我的错答 / 正确答案解析
+        var detail = '';
+        detail += '<div class="detail-row"><span class="dk">错因</span><span class="dv">'+esc(it.errorType||'未标注')+'</span></div>';
+        detail += '<div class="detail-row"><span class="dk">难度</span><span class="dv">'+esc(it.difficulty||'未标注')+'</span></div>';
+        if (it.myAnswer) detail += '<div class="detail-row wrong"><span class="dk">我的错答</span><span class="dv">'+esc(it.myAnswer)+'</span></div>';
+        if (it.correctAnswer) detail += '<div class="detail-row right"><span class="dk">正确答案</span><span class="dv">'+esc(it.correctAnswer)+'</span></div>';
         return '<div class="card" onclick="App.edit(\''+it.id+'\')">'+
           '<div class="card-head">'+
             '<span class="badge b-subject">'+esc(it.subject||'未分类')+'</span>'+
-            '<span class="badge b-error">'+esc(it.errorType||'未标注')+'</span>'+
             '<span class="badge '+mClass+'">'+MASTERY[mKey]+'</span>'+
             '<span class="card-time">'+time+'</span>'+
           '</div>'+
           '<div class="card-body">'+img+'<div class="card-text">'+
-            '<div class="qtext">'+esc(qShow)+'</div>'+
-            '<div class="tags">'+esc(tags)+'</div>'+
+            '<div class="qtext">'+qHtml+'</div>'+
+            (tags?'<div class="tags">'+esc(tags)+'</div>':'')+
           '</div></div>'+
+          detail+
           '<div class="card-foot"><span>已复习 '+(it.reviewCount||0)+' 次</span><span class="edit">点击编辑 ›</span></div>'+
         '</div>';
       }).join('');
@@ -187,13 +193,11 @@
       this.editingId = '';
       this.currentImage = '';
       document.getElementById('add-title').textContent = '录入错题';
-      document.getElementById('f-question').value = '';
+      document.getElementById('f-question').innerHTML = '';
       document.getElementById('f-myanswer').value = '';
       document.getElementById('f-correct').value = '';
       document.getElementById('f-knowledge').value = '';
       document.getElementById('f-source').value = '';
-      document.getElementById('f-subject2').value = SUBJECTS[0];
-      document.getElementById('f-grade').value = '初一';
       document.getElementById('f-errtype').value = ERROR_TYPES[0];
       document.getElementById('f-diff').value = '基础';
       document.getElementById('f-mastery').value = 'unmastered';
@@ -220,13 +224,11 @@
       this.editingId = id;
       this.currentImage = it.imagePath || '';
       document.getElementById('add-title').textContent = '编辑错题';
-      document.getElementById('f-question').value = it.questionText || '';
+      document.getElementById('f-question').innerHTML = it.questionHtml || esc(it.questionText || '');
       document.getElementById('f-myanswer').value = it.myAnswer || '';
       document.getElementById('f-correct').value = it.correctAnswer || '';
       document.getElementById('f-knowledge').value = (it.knowledgePoints||[]).join('、');
       document.getElementById('f-source').value = it.source || '';
-      document.getElementById('f-subject2').value = it.subject || SUBJECTS[0];
-      document.getElementById('f-grade').value = it.grade || '初一';
       document.getElementById('f-errtype').value = it.errorType || ERROR_TYPES[0];
       document.getElementById('f-diff').value = it.difficulty || '基础';
       document.getElementById('f-mastery').value = it.mastery || 'unmastered';
@@ -266,13 +268,16 @@
     },
 
     save: function () {
-      var q = document.getElementById('f-question').value.trim();
-      if (!q && !this.currentImage) { this.toast('请拍照或填写题干'); return; }
+      var qHtml = sanitizeRichHtml(document.getElementById('f-question').innerHTML);
+      var qText = richHtmlToText(qHtml).trim();
+      if (!qText && !this.currentImage) { this.toast('请拍照或填写题干'); return; }
+      var old = this.editingId ? Store.get(this.editingId) : null;
       var data = {
         imagePath: this.currentImage,
-        questionText: q,
-        subject: document.getElementById('f-subject2').value,
-        grade: document.getElementById('f-grade').value,
+        questionText: qText,
+        questionHtml: qHtml,
+        subject: (old && old.subject) || '未分类',
+        grade: (old && old.grade) || '未分类',
         errorType: document.getElementById('f-errtype').value,
         difficulty: document.getElementById('f-diff').value,
         myAnswer: document.getElementById('f-myanswer').value.trim(),
@@ -304,55 +309,7 @@
       }
     },
 
-    /* ---------- OCR 增强（预处理 → 双模式识别 → 后处理 → 校对） ---------- */
-
-    // 图像预处理：转灰度 + Otsu 二值化 + 按需放大，提升印刷体/小字识别率
-    preprocessForOCR: function (dataUrl) {
-      return new Promise(function (resolve) {
-        var img = new Image();
-        img.onload = function () {
-          try {
-            var w = img.naturalWidth || img.width, h = img.naturalHeight || img.height;
-            var scale = w < 1400 ? Math.min(2.5, 1600 / w) : 1; // 小图放大到约1600px
-            var cw = Math.round(w * scale), ch = Math.round(h * scale);
-            var canvas = document.createElement('canvas');
-            canvas.width = cw; canvas.height = ch;
-            var ctx = canvas.getContext('2d', { willReadFrequently: true });
-            ctx.drawImage(img, 0, 0, cw, ch);
-            var id = ctx.getImageData(0, 0, cw, ch), d = id.data;
-            // 灰度
-            var hist = new Uint32Array(256);
-            var gray = new Uint8Array(cw * ch);
-            for (var i = 0, p = 0; i < d.length; i += 4, p++) {
-              var g = (d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114) | 0;
-              gray[p] = g; hist[g]++;
-            }
-            // Otsu 求阈值
-            var total = cw * ch, sum = 0, t;
-            for (t = 0; t < 256; t++) sum += t * hist[t];
-            var sumB = 0, wB = 0, maxV = -1, th = 128;
-            for (t = 0; t < 256; t++) {
-              wB += hist[t]; if (!wB) continue;
-              var wF = total - wB; if (!wF) break;
-              sumB += t * hist[t];
-              var mB = sumB / wB, mF = (sum - sumB) / wF;
-              var v = wB * wF * (mB - mF) * (mB - mF);
-              if (v > maxV) { maxV = v; th = t; }
-            }
-            th = Math.max(60, Math.min(220, th)); // 防止过暗/过曝误判
-            // 二值化（反锯齿文献用软阈值，这里硬阈值对印刷体更稳）
-            for (var i2 = 0, p2 = 0; i2 < d.length; i2 += 4, p2++) {
-              var b = gray[p2] < th ? 0 : 255;
-              d[i2] = d[i2 + 1] = d[i2 + 2] = b; d[i2 + 3] = 255;
-            }
-            ctx.putImageData(id, 0, 0);
-            resolve(canvas);
-          } catch (e) { resolve(dataUrl); } // 预处理失败则回退原图
-        };
-        img.onerror = function () { resolve(dataUrl); };
-        img.src = dataUrl;
-      });
-    },
+    /* ---------- OCR 后处理与校对（云端识别共用） ---------- */
 
     // 后处理校正：全角半角、中文断行合并、数学符号规范、杂讯清理
     postProcessOCR: function (text, mode) {
@@ -395,80 +352,22 @@
       return s;
     },
 
-    runOCR: function (mode) {
-      var self = this;
-      if (!this.currentImage) { this.toast('请先拍照或选择图片'); return; }
-      if (typeof Tesseract === 'undefined') { this.toast('OCR 组件未加载，请检查网络'); return; }
-      mode = mode === 'formula' ? 'formula' : 'general';
-      var btnG = document.getElementById('ocr-btn');
-      var btnF = document.getElementById('ocr-formula-btn');
-      var status = document.getElementById('ocr-status');
-      var confEl = document.getElementById('ocr-conf');
-      var review = document.getElementById('ocr-review');
-      btnG.disabled = true; btnF.disabled = true;
-      review.classList.add('hidden');
-      confEl.textContent = '';
-      status.textContent = '正在预处理图像（灰度/二值化/放大）…';
-
-      var usePre = document.getElementById('ocr-preprocess').checked;
-      var feed = usePre ? this.preprocessForOCR(this.currentImage) : Promise.resolve(this.currentImage);
-
-      feed.then(function (imageInput) {
-        if (!self.ocrWorker) {
-          status.textContent = '首次使用需下载中英文识别包（约20MB）…';
-          self.ocrWorker = Tesseract.createWorker('chi_sim+eng', 1, {
-            logger: function (m) {
-              if (m.status === 'recognizing text') {
-                status.textContent = '识别中 ' + Math.round(m.progress * 100) + '%';
-              } else if (m.status === 'loading language traineddata' || m.status === 'initializing tesseract') {
-                status.textContent = '正在加载识别引擎…';
-              }
-            }
-          });
-        }
-        return self.ocrWorker.then(function (worker) {
-          // 版式：试卷题块用 PSM 6（统一文本块），通常比自动分栏更准
-          try { worker.setParameters({ tessedit_pageseg_mode: '6' }); } catch (e) {}
-          status.textContent = '正在识别…';
-          return worker.recognize(imageInput);
-        });
-      }).then(function (res) {
-        var raw = (res.data && res.data.text) || '';
-        var text = self.postProcessOCR(raw, mode);
-        var conf = res.data && res.data.confidence;
-        if (text) {
-          document.getElementById('ocr-result').value = text;
-          review.classList.remove('hidden');
-          if (typeof conf === 'number') {
-            var lv = conf >= 75 ? '高' : (conf >= 50 ? '中' : '低');
-            var color = conf >= 75 ? 'var(--green)' : (conf >= 50 ? 'var(--orange)' : 'var(--red)');
-            confEl.innerHTML = '置信度 <b style="color:' + color + '">' + lv + ' ' + Math.round(conf) + '%</b>' +
-              (conf < 75 ? ' · 请重点校对' : '');
-          }
-          status.textContent = '识别完成，请在下方校对后填入题干';
-          self.toast('识别完成，请校对');
-          try { document.getElementById('ocr-result').scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) {}
-        } else {
-          status.textContent = '未识别到文字，请手动输入或改用另一张照片';
-          self.toast('未识别到文字');
-        }
-        btnG.disabled = false; btnF.disabled = false;
-      }).catch(function (err) {
-        status.textContent = '识别失败，请手动输入';
-        btnG.disabled = false; btnF.disabled = false;
-        self.toast('OCR 识别失败');
-        console.error(err);
-      });
-    },
-
-    // 把校对区结果填入题干（replace）或追加（append）
+    // 把校对区结果填入富文本题干（replace）或追加（append），按纯文本转义、换行转 <br>
     applyOCR: function (append) {
       var text = document.getElementById('ocr-result').value.trim();
       if (!text) { this.toast('校对区为空'); return; }
       var el = document.getElementById('f-question');
-      el.value = append ? (el.value ? el.value.replace(/\s+$/, '') + '\n' + text : text) : text;
+      var html = esc(text).replace(/\n/g, '<br>');
+      el.innerHTML = append ? (el.innerHTML.trim() ? el.innerHTML.replace(/(<br\s*\/?\s*>|\s)+$/, '') + '<br>' + html : html) : html;
       this.toast(append ? '已追加到题干' : '已填入题干');
       try { el.focus(); } catch (e) {}
+    },
+
+    // 富文本工具栏命令（加粗/上下标/标红等）
+    richCmd: function (cmd, val) {
+      var el = document.getElementById('f-question');
+      if (!el) return;
+      try { el.focus(); document.execCommand(cmd, false, val || null); } catch (e) {}
     },
 
     // 在校对区光标处插入数学符号
@@ -504,7 +403,7 @@
       // 首次使用需知情同意（照片将上传到第三方服务器）
       var consented = localStorage.getItem(OCR_CONSENT_STORAGE) === '1';
       if (!consented) {
-        var ok = confirm('云端识别说明\n\n· 题目照片将上传到第三方服务 OCR.space 进行识别\n· 识别完成后网页不会保存照片副本，但第三方会短暂处理该图片\n· 若不希望照片外传，请使用「本地识别」\n\n是否同意并继续？');
+        var ok = confirm('云端识别说明\n\n· 题目照片将上传到第三方服务 OCR.space 进行识别\n· 识别完成后网页不会保存照片副本，但第三方会短暂处理该图片\n· 若不希望照片外传，请手动录入题干\n\n是否同意并继续？');
         if (!ok) return;
         localStorage.setItem(OCR_CONSENT_STORAGE, '1');
       }
@@ -554,7 +453,7 @@
         .catch(function (err) {
           var msg = String(err && err.message || err);
           status.textContent = '云端识别失败：' + msg.slice(0, 40);
-          self.toast('云端识别失败，可改用本地识别');
+          self.toast('云端识别失败，请手动输入或重试');
           console.error(err);
         })
         .then(function () { btn.disabled = false; });
@@ -609,7 +508,8 @@
       var q = this.bankItems[idx];
       if (!q) return;
       Store.create({
-        imagePath: '', questionText: q.questionText || '', subject: q.subject || '数学',
+        imagePath: '', questionText: q.questionText || '', questionHtml: esc(q.questionText || ''),
+        subject: q.subject || '数学',
         grade: q.grade || '初一', errorType: q.errorType || '概念不清', difficulty: q.difficulty || '基础',
         myAnswer: '', correctAnswer: q.correctAnswer || '', knowledgePoints: q.knowledgePoints || [],
         source: q.source || '公共题库', mastery: 'unmastered', reviewCount: 0
@@ -656,7 +556,7 @@
 
       var html = '<div class="insight"><div class="lb">学情提示</div><div class="tx">'+esc(insight)+'</div>'+
         '<div style="font-size:12px;opacity:.85;margin-top:10px">已收录 '+total+' 道错题</div></div>';
-      html += '<div class="stat-card"><h4>按学科分布</h4>'+bars(dist('subject'),'var(--blue)')+'</div>';
+      html += '<div class="stat-card"><h4>按难度分布</h4>'+bars(dist('difficulty'),'var(--blue)')+'</div>';
       html += '<div class="stat-card"><h4>按错因分布</h4>'+bars(dist('errorType'),'#fa8c16')+'</div>';
       html += '<div class="stat-card"><h4>掌握进度</h4>'+bars(mRows,'#52c41a')+'</div>';
       if (kRows.length) {
@@ -682,10 +582,13 @@
         var img = q.imagePath ? '<img src="'+q.imagePath+'">' : '';
         var html = '<div class="progress"><span>第 '+(this.quizIndex+1)+' / '+this.quizQueue.length+' 题</span>'+
           '<a href="#" onclick="App.quitQuiz();return false" style="color:var(--hint)">退出</a></div>';
+        var qHtml = q.questionHtml ? sanitizeRichHtml(q.questionHtml) : esc(q.questionText||'');
+        if (!qHtml) qHtml = '<span style="color:var(--hint)">（见题目照片）</span>';
         html += '<div class="practice-q"><div class="card-head">'+
-          '<span class="badge b-subject">'+esc(q.subject)+'</span>'+
-          '<span class="badge b-error">'+esc(q.errorType)+'</span></div>'+img+
-          '<div class="q-label">题干</div><div class="q-value">'+esc(q.questionText||'（见题目照片）')+'</div>'+
+          '<span class="badge b-subject">'+esc(q.subject||'未分类')+'</span>'+
+          '<span class="badge b-error">错因：'+esc(q.errorType||'未标注')+'</span>'+
+          '<span class="badge b-error">难度：'+esc(q.difficulty||'未标注')+'</span></div>'+img+
+          '<div class="q-label">题干</div><div class="q-value">'+qHtml+'</div>'+
           '<div class="q-label">我当时的错答</div><div class="q-value q-wrong">'+esc(q.myAnswer||'（未填写）')+'</div>'+
           (q.source?'<div class="q-label">来源</div><div class="q-value" style="font-size:12px;color:var(--hint)">'+esc(q.source)+'</div>':'')+
           '</div>';
@@ -804,4 +707,51 @@ function esc(s) {
   return String(s==null?'':s).replace(/[&<>"']/g, function(c){
     return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
   });
+}
+
+/* 富文本 HTML 白名单清洗：只保留安全排版标签，剥离 script、事件属性、javascript 协议。
+   题干由本人在本机录入，但仍做清洗，避免粘贴网页时带入危险脚本。 */
+function sanitizeRichHtml(html) {
+  var s = String(html == null ? '' : html);
+  // 移除整个危险块
+  s = s.replace(/<(script|style|iframe|object|embed|link|meta)[^>]*>[\s\S]*?<\/\1>/gi, '')
+       .replace(/<script[^>]*\/?>/gi, '');
+  // 移除所有 on* 事件属性、javascript: 协议、srcdoc
+  s = s.replace(/\son\w+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+       .replace(/\s(srcdoc|href)\s*=\s*(["']?)\s*javascript:[\s\S]*?\2/gi, '')
+       .replace(/javascript:/gi, '');
+  // 移除 pt 之类无关属性，收敛 img 到仅 data:image（题目照片以 dataURL 存）
+  s = s.replace(/<img([^>]*)>/gi, function (m, attrs) {
+    var srcM = /\bsrc\s*=\s*(["'])(data:image\/[^"']+)\1/i.exec(attrs) || /\bsrc\s*=\s*(["'])(https?:\/\/[^"']+)\1/i.exec(attrs);
+    if (!srcM) return '';
+    var altM = /\balt\s*=\s*(["'])([^"']*)\1/i.exec(attrs);
+    return '<img src="' + srcM[2] + '"' + (altM ? ' alt="' + altM[2] + '"' : '') + '>';
+  });
+  // 标签白名单：保留常见排版标签，剥掉其余标签但保留其文字
+  var allow = /^<\/?(b|strong|i|em|u|s|sub|sup|br|div|p|span|ul|ol|li|blockquote|font|img)(\s[^>]*)?\/?>$/i;
+  s = s.replace(/<[^>]+>/g, function (tag) {
+    if (allow.test(tag)) {
+      // 对保留标签，收敛 style 只留颜色/字体粗细相关，去掉 position/url 等
+      return tag.replace(/\sstyle\s*=\s*(["'])([^"']*)\1/ig, function (sm, q, css) {
+        var safeCss = css.split(';').filter(function (rule) {
+          return /^\s*(color|background-color|font-weight|font-style|text-decoration|font-size)\s*:/i.test(rule) && !/url\(|expression|position/i.test(rule);
+        }).join(';');
+        return safeCss ? ' style="' + safeCss + '"' : '';
+      }).replace(/\scolor\s*=\s*(["']?)[^"'\s>]+\1/ig, '');
+    }
+    return '';
+  });
+  return s.trim();
+}
+
+/* 富文本 HTML → 纯文本（保留换行与块分隔），用于搜索与摘要 */
+function richHtmlToText(html) {
+  var s = String(html == null ? '' : html);
+  s = s.replace(/<br\s*\/?>/gi, '\n')
+       .replace(/<\/(div|p|li|blockquote|ul|ol)>/gi, '\n')
+       .replace(/<[^>]+>/g, '')
+       .replace(/&nbsp;/gi, ' ')
+       .replace(/&lt;/gi, '<').replace(/&gt;/gi, '>').replace(/&amp;/gi, '&')
+       .replace(/&quot;/gi, '"').replace(/&#39;/gi, "'");
+  return s;
 }
