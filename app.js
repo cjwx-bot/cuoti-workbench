@@ -14,6 +14,12 @@
   var OCR_CONSENT_STORAGE = 'cuoti-cloud-ocr-consent';
   var OCRSPACE_DEFAULT_KEY = 'helloworld';     // 官方公共测试key（有速率限制，仅测试用）
   var BANK_URL = 'questions.json';             // 公共题库（只读，不含学生数据）
+  // 视觉大模型（SiliconFlow，前端直连）。视觉模型可正确识别分数/公式版式。
+  var VISION_ENDPOINT = 'https://api.siliconflow.cn/v1/chat/completions';
+  var VISION_MODELS = ['Qwen/Qwen3-VL-8B-Instruct', 'THUDM/GLM-4.1V-9B-Thinking'];
+  var VISION_KEY_STORAGE = 'cuoti-vision-key';  // 内置key优先，否则读本机
+  var VISION_BUILTIN_KEY = '';                  // 内置 API Key（发布前填入；注意公开仓库可见）
+  var VISION_CONSENT_STORAGE = 'cuoti-vision-consent';
 
   /* ============ 数据层 ============ */
   var Store = {
@@ -476,6 +482,107 @@
         .then(function () { btn.disabled = false; });
     },
 
+    /* ---------- 视觉大模型 OCR（SiliconFlow，可识别分数/公式，照片上传第三方） ---------- */
+    getVisionKey: function () {
+      return VISION_BUILTIN_KEY || (localStorage.getItem(VISION_KEY_STORAGE) || '').trim();
+    },
+    saveVisionKey: function () {
+      var v = (document.getElementById('vision-key') || {}).value || '';
+      v = v.trim();
+      if (v) { localStorage.setItem(VISION_KEY_STORAGE, v); this.toast('视觉模型 Key 已保存（仅存本机）'); }
+      else { localStorage.removeItem(VISION_KEY_STORAGE); this.toast('已清除 Key'); }
+    },
+
+    // 视觉识别 Prompt：要求输出纯 HTML 片段，分数用 .frac 结构，保留题号与选项
+    VISION_PROMPT: '这是一道中国初中数学题的照片。请把【印刷体题干】完整转录为 HTML 富文本片段，严格遵循：\n' +
+      '1. 只输出题干的 HTML，不要任何解释、不要 markdown 代码块、不要引言。\n' +
+      '2. 分数必须写成 <span class="frac"><span class="n">分子</span><span class="d">分母</span></span>，例如 5/8 写成 <span class="frac"><span class="n">5</span><span class="d">8</span></span>。\n' +
+      '3. 上标用 <sup>，下标用 <sub>；根号用 √ 符号；乘号用 ×，除号用 ÷。\n' +
+      '4. 保留题号（如"6."）、括号、单位、选项（A/B/C/D）与换行；换行用 <br>。\n' +
+      '5. 不要包含红笔/铅笔的手写批改、手写答案、分数得分、页眉页脚（学校/班级/第X页）。\n' +
+      '6. 看不清的字用 □ 代替，不要猜测。\n' +
+      '现在开始转录：',
+
+    runVisionOCR: function () {
+      var self = this;
+      if (!this.currentImage) { this.toast('请先选择照片'); return; }
+      var key = this.getVisionKey();
+      if (!key) { this.toast('请先填写 SiliconFlow API Key'); this.openVisionCfg(); return; }
+
+      var consented = localStorage.getItem(VISION_CONSENT_STORAGE) === '1';
+      if (!consented) {
+        var ok = confirm('视觉大模型识别说明\n\n· 题目照片将上传到第三方服务 SiliconFlow（硅基流动）由视觉模型识别\n· 视觉模型能正确识别分数、公式等版式，识别率远高于传统 OCR\n· 网页不保存照片副本，但第三方会短暂处理该图片\n· 识别会调用你的 API Key 额度（免费模型无限额度，仅受速率限制）\n\n是否同意并继续？');
+        if (!ok) return;
+        localStorage.setItem(VISION_CONSENT_STORAGE, '1');
+      }
+
+      var btn = document.getElementById('vision-btn');
+      var status = document.getElementById('ocr-status');
+      var confEl = document.getElementById('ocr-conf');
+      var review = document.getElementById('ocr-review');
+      btn.disabled = true; review.classList.add('hidden'); confEl.textContent = '';
+      status.textContent = '视觉模型识别中（约 3-8 秒）…';
+
+      var model = (document.getElementById('vision-model') || {}).value || VISION_MODELS[0];
+      var payload = {
+        model: model,
+        messages: [{ role: 'user', content: [
+          { type: 'text', text: self.VISION_PROMPT },
+          { type: 'image_url', image_url: { url: this.currentImage } }
+        ]}],
+        max_tokens: 1500,
+        temperature: 0
+      };
+
+      fetch(VISION_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
+        body: JSON.stringify(payload)
+      })
+      .then(function (r) {
+        return r.json().then(function (d) { if (!r.ok) throw new Error(d.message || d.error || ('HTTP ' + r.status)); return d; });
+      })
+      .then(function (d) {
+        var content = d.choices && d.choices[0] && d.choices[0].message && d.choices[0].message.content || '';
+        var html = String(content).trim();
+        // 清理模型可能的 markdown 代码块围栏
+        html = html.replace(/^```(?:html)?\s*/i, '').replace(/```\s*$/, '').trim();
+        if (!html) { status.textContent = '视觉模型未返回内容'; self.toast('未识别到内容'); return; }
+        // 清洗后填入题干（扩展白名单支持 .frac 分数结构）
+        var safe = sanitizeVisionHtml(html);
+        self.fillQuestionRawHtml(safe);
+        document.getElementById('ocr-result').value = richHtmlToText(safe);
+        review.classList.remove('hidden');
+        confEl.innerHTML = '<b style="color:var(--green)">视觉识别完成 · 已填入题干</b>';
+        status.textContent = '识别完成，题干已按 HTML 富文本呈现（分数为上下结构）';
+        self.toast('视觉识别完成');
+        try {
+          var q = document.getElementById('f-question');
+          q.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          q.classList.add('ocr-flash');
+          setTimeout(function () { q.classList.remove('ocr-flash'); }, 1200);
+        } catch (e) {}
+      })
+      .catch(function (err) {
+        var msg = String(err && err.message || err);
+        status.textContent = '视觉识别失败：' + msg.slice(0, 40);
+        self.toast('视觉识别失败，请检查 Key 或网络');
+        console.error(err);
+      })
+      .then(function () { btn.disabled = false; });
+    },
+
+    // 直接把 HTML 写入题干（用于视觉模型已结构化的输出）
+    fillQuestionRawHtml: function (html) {
+      var el = document.getElementById('f-question');
+      if (el) el.innerHTML = html;
+    },
+
+    openVisionCfg: function () {
+      var box = document.getElementById('vision-cfg');
+      if (box) box.classList.toggle('hidden');
+    },
+
     /* ---------- 公共题库（GitHub 只读 JSON，不含学生数据） ---------- */
     loadBank: function () {
       var self = this;
@@ -759,6 +866,17 @@ function sanitizeRichHtml(html) {
     return '';
   });
   return s.trim();
+}
+
+/* 视觉模型输出清洗：在通用白名单基础上，保留 span 的 class（frac/n/d）与分数结构 */
+function sanitizeVisionHtml(html) {
+  var s = sanitizeRichHtml(html);
+  // sanitizeRichHtml 会保留 <span> 标签但可能清理 style；这里确保分数三件套的 class 存在
+  // 由于通用清洗已保留 span 及其属性，通常无需额外处理；做一次兜底规范化
+  s = s.replace(/<span\s+class=["']frac["']\s*>/gi, '<span class="frac">')
+       .replace(/<span\s+class=["']n["']\s*>/gi, '<span class="n">')
+       .replace(/<span\s+class=["']d["']\s*>/gi, '<span class="d">');
+  return s;
 }
 
 /* 富文本 HTML → 纯文本（保留换行与块分隔），用于搜索与摘要 */
