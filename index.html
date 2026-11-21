@@ -119,6 +119,9 @@ body{
 .rich-editor:empty:before{content:attr(data-placeholder);color:var(--hint)}
 .rich-editor img{max-width:100%;height:auto;border-radius:8px;margin:6px 0}
 .rich-editor sup{font-size:.75em}.rich-editor sub{font-size:.75em}
+.frac{display:inline-flex;flex-direction:column;vertical-align:middle;text-align:center;line-height:1.05;margin:0 2px;font-size:.92em}
+.frac .n{border-bottom:1.5px solid currentColor;padding:0 3px}
+.frac .d{padding:0 3px}
 .rich-editor.ocr-flash{animation:ocrFlash 1.2s ease}
 @keyframes ocrFlash{0%,100%{box-shadow:none}30%,70%{box-shadow:0 0 0 3px rgba(24,96,214,.35);background:#f0f6ff}}
 .field-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
@@ -145,6 +148,9 @@ body{
 .ocr-review{margin-top:12px;background:var(--blue-l);border-radius:12px;padding:12px}
 .ocr-review-head{display:flex;justify-content:space-between;align-items:center;font-size:12px;font-weight:600;color:var(--blue-d);margin-bottom:8px}
 .ocr-conf{font-weight:500;color:var(--muted)}
+.vision-cfg{margin-top:12px;background:#eef4ff;border-radius:12px;padding:12px}
+.vision-cfg .ocr-cfg-tip{color:#285a9e}
+.vision-cfg .ocr-cfg-row select,.vision-cfg .ocr-cfg-row input{background:#fff}
 .ocr-cloud-cfg{margin-top:12px;background:#fff7e6;border-radius:12px;padding:12px}
 .ocr-cfg-row{display:flex;align-items:center;gap:8px;margin-bottom:9px;flex-wrap:wrap}
 .ocr-cfg-row label{font-size:12px;color:var(--muted);width:60px;flex-shrink:0}
@@ -257,15 +263,30 @@ body{
         <input type="file" id="file-cam" accept="image/*" capture="environment" class="hidden" onchange="App.onImage(event)">
         <img id="preview" class="preview-img hidden" onclick="App.previewImg()">
         <div class="ocr-bar">
-          <button class="btn btn-primary" id="ocr-cloud-btn" onclick="App.runCloudOCR()">☁ 云端识别题干（更准）</button>
+          <button class="btn btn-primary" id="vision-btn" onclick="App.runVisionOCR()">视觉识别题干（推荐·识别分数公式）</button>
+          <button class="btn btn-ghost" id="ocr-cloud-btn" onclick="App.runCloudOCR()">普通云端识别</button>
+        </div>
+        <div class="vision-cfg" id="vision-cfg">
+          <div class="ocr-cfg-row">
+            <label>视觉模型</label>
+            <select id="vision-model">
+              <option value="Qwen/Qwen3-VL-8B-Instruct">Qwen3-VL-8B（免费·快）</option>
+              <option value="THUDM/GLM-4.1V-9B-Thinking">GLM-4.1V-9B（免费·更准）</option>
+            </select>
+          </div>
+          <div class="ocr-cfg-row">
+            <label>API Key</label>
+            <input type="password" id="vision-key" placeholder="SiliconFlow 的 sk- 开头 Key">
+            <button class="btn btn-mini" onclick="App.saveVisionKey()">保存</button>
+          </div>
+          <div class="ocr-cfg-tip">视觉模型能正确识别分数、根号等数学版式。Key 留空则用内置 Key；自填 Key 仅存本机。需在 cloud.siliconflow.cn 免费注册获取 Key。</div>
         </div>
         <div class="ocr-cloud-cfg">
           <div class="ocr-cfg-row">
             <label>识别语言</label>
             <select id="ocr-lang">
-              <option value="chs">简体中文</option>
+              <option value="chs">简体中文（自动识别其中英文）</option>
               <option value="cht">繁体中文</option>
-              <option value="chs+eng">中英混合</option>
               <option value="eng">英文</option>
             </select>
           </div>
