@@ -271,7 +271,7 @@ body{
             <label>视觉模型</label>
             <select id="vision-model">
               <option value="Qwen/Qwen3-VL-8B-Instruct">Qwen3-VL-8B（免费·快）</option>
-              <option value="THUDM/GLM-4.1V-9B-Thinking">GLM-4.1V-9B（免费·更准）</option>
+              <option value="Qwen/Qwen3-VL-30B-A3B-Instruct">Qwen3-VL-30B（免费·更准）</option>
             </select>
           </div>
           <div class="ocr-cfg-row">
@@ -279,7 +279,7 @@ body{
             <input type="password" id="vision-key" placeholder="SiliconFlow 的 sk- 开头 Key">
             <button class="btn btn-mini" onclick="App.saveVisionKey()">保存</button>
           </div>
-          <div class="ocr-cfg-tip">视觉模型能正确识别分数、根号等数学版式。Key 留空则用内置 Key；自填 Key 仅存本机。需在 cloud.siliconflow.cn 免费注册获取 Key。</div>
+          <div class="ocr-cfg-tip">视觉模型能正确识别分数、根号等数学版式。公开版不含内置 Key，请在下方粘贴你自己的 Key 并点「保存」——仅存本机浏览器，不上传、不写进代码。需在 cloud.siliconflow.cn 免费注册获取。</div>
         </div>
         <div class="ocr-cloud-cfg">
           <div class="ocr-cfg-row">
