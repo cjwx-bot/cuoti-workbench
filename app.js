@@ -16,7 +16,7 @@
   var BANK_URL = 'questions.json';             // 公共题库（只读，不含学生数据）
   // 视觉大模型（SiliconFlow，前端直连）。视觉模型可正确识别分数/公式版式。
   var VISION_ENDPOINT = 'https://api.siliconflow.cn/v1/chat/completions';
-  var VISION_MODELS = ['Qwen/Qwen3-VL-8B-Instruct', 'THUDM/GLM-4.1V-9B-Thinking'];
+  var VISION_MODELS = ['Qwen/Qwen3-VL-8B-Instruct', 'Qwen/Qwen3-VL-30B-A3B-Instruct'];
   var VISION_KEY_STORAGE = 'cuoti-vision-key';  // 内置key优先，否则读本机
   var VISION_BUILTIN_KEY = '';                  // 内置 API Key（发布前填入；注意公开仓库可见）
   var VISION_CONSENT_STORAGE = 'cuoti-vision-consent';
@@ -499,8 +499,9 @@
       '2. 分数必须写成 <span class="frac"><span class="n">分子</span><span class="d">分母</span></span>，例如 5/8 写成 <span class="frac"><span class="n">5</span><span class="d">8</span></span>。\n' +
       '3. 上标用 <sup>，下标用 <sub>；根号用 √ 符号；乘号用 ×，除号用 ÷。\n' +
       '4. 保留题号（如"6."）、括号、单位、选项（A/B/C/D）与换行；换行用 <br>。\n' +
-      '5. 不要包含红笔/铅笔的手写批改、手写答案、分数得分、页眉页脚（学校/班级/第X页）。\n' +
-      '6. 看不清的字用 □ 代替，不要猜测。\n' +
+      '5. 填空题括号里的手写答案是学生作答，绝对不要识别；只保留印刷体的空括号（　），不要把整数手写答案套成分数（如把 30 写成 30/1）。\n' +
+      '6. 不要包含红笔/铅笔的手写批改、手写答案、分数得分、页眉页脚（学校/班级/第X页）。\n' +
+      '7. 看不清的字用 □ 代替，不要猜测。\n' +
       '现在开始转录：',
 
     runVisionOCR: function () {
@@ -876,6 +877,9 @@ function sanitizeVisionHtml(html) {
   s = s.replace(/<span\s+class=["']frac["']\s*>/gi, '<span class="frac">')
        .replace(/<span\s+class=["']n["']\s*>/gi, '<span class="n">')
        .replace(/<span\s+class=["']d["']\s*>/gi, '<span class="d">');
+  // 视觉模型常把填空里的手写整数答案误套成分数（如 30/1、2/1）。
+  // 初中题干分母为 1 的分数极罕见，统一规整为普通数字，避免题干出现 "30/1"。
+  s = s.replace(/<span class="frac">\s*<span class="n">([^<]+)<\/span>\s*<span class="d">1<\/span>\s*<\/span>/g, '$1');
   return s;
 }
 
