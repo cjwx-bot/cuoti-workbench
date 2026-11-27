@@ -14,11 +14,10 @@
   var OCR_CONSENT_STORAGE = 'cuoti-cloud-ocr-consent';
   var OCRSPACE_DEFAULT_KEY = 'helloworld';     // 官方公共测试key（有速率限制，仅测试用）
   var BANK_URL = 'questions.json';             // 公共题库（只读，不含学生数据）
-  // 视觉大模型（SiliconFlow，前端直连）。视觉模型可正确识别分数/公式版式。
-  var VISION_ENDPOINT = 'https://api.siliconflow.cn/v1/chat/completions';
+  // 视觉大模型：前端直连 Cloudflare Worker 代理，API Key 藏在服务端，页面零配置。
+  var VISION_ENDPOINT = 'https://cuoti-vision.36852641.workers.dev';  // 代理地址（非密钥，可公开）
+  var VISION_PROXY_TOKEN = 'cuoti-vision-2026';                       // 代理共享口令（非密钥，仅挡滥用）
   var VISION_MODELS = ['Qwen/Qwen3-VL-8B-Instruct', 'Qwen/Qwen3-VL-30B-A3B-Instruct'];
-  var VISION_KEY_STORAGE = 'cuoti-vision-key';  // 内置key优先，否则读本机
-  var VISION_BUILTIN_KEY = '';                  // 内置 API Key（发布前填入；注意公开仓库可见）
   var VISION_CONSENT_STORAGE = 'cuoti-vision-consent';
 
   /* ============ 数据层 ============ */
@@ -482,16 +481,7 @@
         .then(function () { btn.disabled = false; });
     },
 
-    /* ---------- 视觉大模型 OCR（SiliconFlow，可识别分数/公式，照片上传第三方） ---------- */
-    getVisionKey: function () {
-      return VISION_BUILTIN_KEY || (localStorage.getItem(VISION_KEY_STORAGE) || '').trim();
-    },
-    saveVisionKey: function () {
-      var v = (document.getElementById('vision-key') || {}).value || '';
-      v = v.trim();
-      if (v) { localStorage.setItem(VISION_KEY_STORAGE, v); this.toast('视觉模型 Key 已保存（仅存本机）'); }
-      else { localStorage.removeItem(VISION_KEY_STORAGE); this.toast('已清除 Key'); }
-    },
+    /* ---------- 视觉大模型 OCR（经 Cloudflare 代理，Key 藏服务端，页面零配置） ---------- */
 
     // 视觉识别 Prompt：要求输出纯 HTML 片段，分数用 .frac 结构，保留题号与选项
     VISION_PROMPT: '这是一道中国初中数学题的照片。请把【印刷体题干】完整转录为 HTML 富文本片段，严格遵循：\n' +
@@ -507,12 +497,10 @@
     runVisionOCR: function () {
       var self = this;
       if (!this.currentImage) { this.toast('请先选择照片'); return; }
-      var key = this.getVisionKey();
-      if (!key) { this.toast('请先填写 SiliconFlow API Key'); this.openVisionCfg(); return; }
 
       var consented = localStorage.getItem(VISION_CONSENT_STORAGE) === '1';
       if (!consented) {
-        var ok = confirm('视觉大模型识别说明\n\n· 题目照片将上传到第三方服务 SiliconFlow（硅基流动）由视觉模型识别\n· 视觉模型能正确识别分数、公式等版式，识别率远高于传统 OCR\n· 网页不保存照片副本，但第三方会短暂处理该图片\n· 识别会调用你的 API Key 额度（免费模型无限额度，仅受速率限制）\n\n是否同意并继续？');
+        var ok = confirm('视觉大模型识别说明\n\n· 题目照片将经安全代理上传到视觉大模型服务识别\n· 视觉模型能正确识别分数、公式等版式，识别率远高于传统 OCR\n· 网页不保存照片副本，服务端仅短暂处理该图片用于识别\n· 本功能免费使用，无需你填写任何 Key\n\n是否同意并继续？');
         if (!ok) return;
         localStorage.setItem(VISION_CONSENT_STORAGE, '1');
       }
@@ -537,7 +525,7 @@
 
       fetch(VISION_ENDPOINT, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
+        headers: { 'Content-Type': 'application/json', 'X-Access-Token': VISION_PROXY_TOKEN },
         body: JSON.stringify(payload)
       })
       .then(function (r) {
@@ -567,7 +555,7 @@
       .catch(function (err) {
         var msg = String(err && err.message || err);
         status.textContent = '视觉识别失败：' + msg.slice(0, 40);
-        self.toast('视觉识别失败，请检查 Key 或网络');
+        self.toast('视觉识别失败，请检查网络后重试');
         console.error(err);
       })
       .then(function () { btn.disabled = false; });
@@ -577,11 +565,6 @@
     fillQuestionRawHtml: function (html) {
       var el = document.getElementById('f-question');
       if (el) el.innerHTML = html;
-    },
-
-    openVisionCfg: function () {
-      var box = document.getElementById('vision-cfg');
-      if (box) box.classList.toggle('hidden');
     },
 
     /* ---------- 公共题库（GitHub 只读 JSON，不含学生数据） ---------- */
