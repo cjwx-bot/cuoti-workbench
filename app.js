@@ -554,8 +554,12 @@
       })
       .catch(function (err) {
         var msg = String(err && err.message || err);
-        status.textContent = '视觉识别失败：' + msg.slice(0, 40);
-        self.toast('视觉识别失败，请检查网络后重试');
+        var friendly = /Failed to fetch|NetworkError|Load failed|fetch failed/i.test(msg)
+          ? '无法连接识别服务（网络或代理不可达）'
+          : msg.slice(0, 90);
+        status.textContent = '视觉识别失败：' + friendly;
+        if (confEl) confEl.innerHTML = '<b style="color:#e74c3c">识别失败：' + friendly + '</b>';
+        self.toast('识别失败：' + friendly);
         console.error(err);
       })
       .then(function () { btn.disabled = false; });
