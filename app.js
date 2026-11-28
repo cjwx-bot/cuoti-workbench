@@ -14,9 +14,10 @@
   var OCR_CONSENT_STORAGE = 'cuoti-cloud-ocr-consent';
   var OCRSPACE_DEFAULT_KEY = 'helloworld';     // 官方公共测试key（有速率限制，仅测试用）
   var BANK_URL = 'questions.json';             // 公共题库（只读，不含学生数据）
-  // 视觉大模型：前端直连 Cloudflare Worker 代理，API Key 藏在服务端，页面零配置。
-  var VISION_ENDPOINT = 'https://cuoti-vision.36852641.workers.dev';  // 代理地址（非密钥，可公开）
-  var VISION_PROXY_TOKEN = 'cuoti-vision-2026';                       // 代理共享口令（非密钥，仅挡滥用）
+  // 视觉大模型：前端直连 SiliconFlow 官方 API（国内可直连、支持浏览器跨域）。
+  // API Key 仅存本机浏览器 localStorage，绝不写入公开源码。
+  var VISION_ENDPOINT = 'https://api.siliconflow.cn/v1/chat/completions';
+  var VISION_KEY_STORAGE = 'cuoti-vision-key';
   var VISION_MODELS = ['Qwen/Qwen3-VL-8B-Instruct', 'Qwen/Qwen3-VL-30B-A3B-Instruct'];
   var VISION_CONSENT_STORAGE = 'cuoti-vision-consent';
 
@@ -96,6 +97,9 @@
       var savedKey = localStorage.getItem(OCR_KEY_STORAGE) || '';
       var keyInput = document.getElementById('ocr-key');
       if (keyInput) keyInput.value = savedKey;
+      var visionKeyInput = document.getElementById('vision-key');
+      if (visionKeyInput) visionKeyInput.value = this.getVisionKey();
+      this.renderVisionKeyState();
       this.renderList();
       this.loadBank();
       this.loadFromQuery();
@@ -483,6 +487,39 @@
 
     /* ---------- 视觉大模型 OCR（经 Cloudflare 代理，Key 藏服务端，页面零配置） ---------- */
 
+    /* ---------- 视觉模型 Key（仅存本机浏览器，不进公开源码） ---------- */
+    getVisionKey: function () {
+      return (localStorage.getItem(VISION_KEY_STORAGE) || '').trim();
+    },
+    saveVisionKey: function () {
+      var input = document.getElementById('vision-key');
+      var v = (input && input.value || '').trim();
+      if (v) {
+        localStorage.setItem(VISION_KEY_STORAGE, v);
+        this.toast('视觉模型 Key 已保存（仅存本机）');
+        if (input) input.value = v;
+      } else {
+        localStorage.removeItem(VISION_KEY_STORAGE);
+        this.toast('已清除 Key');
+      }
+      this.renderVisionKeyState();
+    },
+    renderVisionKeyState: function () {
+      var tip = document.getElementById('vision-key-state');
+      if (!tip) return;
+      var has = !!this.getVisionKey();
+      tip.textContent = has ? '已保存 Key（仅存本机浏览器，可直接使用）' : '尚未保存 Key，请粘贴后点「保存」';
+      tip.style.color = has ? 'var(--green)' : '#c0392b';
+    },
+    showVisionCfg: function () {
+      var box = document.getElementById('vision-cfg');
+      if (box) {
+        box.classList.remove('hidden');
+        var input = document.getElementById('vision-key');
+        if (input) { try { input.focus(); input.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) {} }
+      }
+    },
+
     // 视觉识别 Prompt：要求输出纯 HTML 片段，分数用 .frac 结构，保留题号与选项
     VISION_PROMPT: '这是一道中国初中数学题的照片。请把【印刷体题干】完整转录为 HTML 富文本片段，严格遵循：\n' +
       '1. 只输出题干的 HTML，不要任何解释、不要 markdown 代码块、不要引言。\n' +
@@ -497,10 +534,12 @@
     runVisionOCR: function () {
       var self = this;
       if (!this.currentImage) { this.toast('请先选择照片'); return; }
+      var key = this.getVisionKey();
+      if (!key) { this.toast('请先填写 SiliconFlow API Key'); this.showVisionCfg(); return; }
 
       var consented = localStorage.getItem(VISION_CONSENT_STORAGE) === '1';
       if (!consented) {
-        var ok = confirm('视觉大模型识别说明\n\n· 题目照片将经安全代理上传到视觉大模型服务识别\n· 视觉模型能正确识别分数、公式等版式，识别率远高于传统 OCR\n· 网页不保存照片副本，服务端仅短暂处理该图片用于识别\n· 本功能免费使用，无需你填写任何 Key\n\n是否同意并继续？');
+        var ok = confirm('视觉大模型识别说明\n\n· 题目照片将直接上传到 SiliconFlow（硅基流动）由视觉模型识别\n· 视觉模型能正确识别分数、公式等版式，识别率远高于传统 OCR\n· 网页不保存照片副本，第三方会短暂处理该图片\n· 使用你自填的 API Key（仅存本机浏览器），免费模型不产生费用\n\n是否同意并继续？');
         if (!ok) return;
         localStorage.setItem(VISION_CONSENT_STORAGE, '1');
       }
@@ -525,7 +564,7 @@
 
       fetch(VISION_ENDPOINT, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Access-Token': VISION_PROXY_TOKEN },
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
         body: JSON.stringify(payload)
       })
       .then(function (r) {
@@ -555,8 +594,10 @@
       .catch(function (err) {
         var msg = String(err && err.message || err);
         var friendly = /Failed to fetch|NetworkError|Load failed|fetch failed/i.test(msg)
-          ? '无法连接识别服务（网络或代理不可达）'
-          : msg.slice(0, 90);
+          ? '无法连接 SiliconFlow（请检查网络）'
+          : /invalid|unauthor|token|401|403/i.test(msg)
+            ? 'API Key 无效或额度不足，请检查后重新保存'
+            : msg.slice(0, 90);
         status.textContent = '视觉识别失败：' + friendly;
         if (confEl) confEl.innerHTML = '<b style="color:#e74c3c">识别失败：' + friendly + '</b>';
         self.toast('识别失败：' + friendly);
